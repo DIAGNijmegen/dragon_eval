@@ -38,6 +38,7 @@ class EvalType(Enum):
     ORDINAL_MULTI_CLASS_CLASSIFICATION = "ordinal multi-class classification (Linear Cohen's kappa)"
     NONORDINAL_MULTI_CLASS_CLASSIFICATION = "non-ordinal multi-class classification (Unweighted Cohen's kappa)"
 
+
 TASK_TYPE = {
     # example tasks
     "Task101_Example_sl_bin_clf": EvalType.BINARY_CLASSIFICATION,
@@ -180,7 +181,7 @@ class DragonEval(ClassificationEvaluation):
             # get all tasks
             self.tasks = sorted([
                 path.stem
-                for path in self._ground_truth_path.glob(f"*.json")
+                for path in self._ground_truth_path.glob("*.json")
             ])
             if not self.tasks:
                 raise ValueError("Could not find any tasks!")
@@ -238,7 +239,7 @@ class DragonEval(ClassificationEvaluation):
         # select ground truth and prediction columns
         label_column = [col for col in self._cases.columns if col.endswith("_target")][0]
         prediction_column = label_column.replace("_target", "")
-        if not prediction_column in self._cases.columns:
+        if prediction_column not in self._cases.columns:
             raise ValueError(f"Could not find prediction column for {label_column} (job: {job_name})")
 
         y_true = self._cases[label_column]
@@ -362,14 +363,14 @@ class DragonEval(ClassificationEvaluation):
         """Aggregates the scores"""
         # calculate mean and std for each task
         self._aggregate_results = self.calculate_aggregate_results(self._scores)
-    
+
         # calculate overall score
         self._aggregate_results["overall"] = {
             "mean": np.mean([score["mean"] for score in self._aggregate_results.values()]),
             "std": np.mean([score["std"] for score in self._aggregate_results.values()]),
         }
 
-        print(f"Aggregate results:")
+        print("Aggregate results:")
         for task_name, scores in self._aggregate_results.items():
             print(f"  {task_name}: {scores['mean']:.3f} ± {scores['std']:.3f}")
 
