@@ -15,7 +15,7 @@
 import re
 from enum import Enum
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -121,7 +121,7 @@ def score_rsmape(
     numerator = np.abs(y_true - y_pred)
     denominator = np.abs(y_true) + np.abs(y_pred) + epsilon
     rsmape = numerator / denominator
-    return 1 - np.mean(rsmape)
+    return float(1 - np.mean(rsmape))
 
 
 def select_entity_labels(labels: List[List[str]], entity_lbl: str) -> List[str]:
@@ -158,7 +158,8 @@ def score_multi_label_f1(
         score = np.average(per_lbl_score, weights=per_lbl_support)
     else:
         raise ValueError(f"Unsupported average: {average}")
-    return score
+
+    return float(score)
 
 
 class DragonEval(ClassificationEvaluation):
@@ -173,13 +174,12 @@ class DragonEval(ClassificationEvaluation):
             join_key="uid",
             **kwargs,
         )
-        self._scores: Dict[str, float] = {}
+        self._scores: Dict[str, Dict[str, float]] = {}
         self.folds = folds
-        self.tasks = tasks
 
-        if self.tasks is None:
+        if tasks is None:
             # get all tasks
-            self.tasks = sorted([
+            self.tasks: list[str] = sorted([
                 path.stem
                 for path in self._ground_truth_path.glob("*.json")
             ])
@@ -188,7 +188,7 @@ class DragonEval(ClassificationEvaluation):
         else:
             # collect task names (possibly using partial names)
             task_names = []
-            for task in self.tasks:
+            for task in tasks:
                 if (self._ground_truth_path / f"{task}.json").exists():
                     task_names.append(task)
                     continue
@@ -201,7 +201,7 @@ class DragonEval(ClassificationEvaluation):
                     raise ValueError(f"Found multiple tasks matching {task}: {files_found}")
 
                 task_names.append(files_found[0])
-            if len(set(task_names)) != len(self.tasks):
+            if len(set(task_names)) != len(list(tasks)):
                 raise ValueError(f"Duplicate tasks found: {task_names}")
             self.tasks = task_names
 
@@ -338,7 +338,7 @@ class DragonEval(ClassificationEvaluation):
         self._scores[task_name][job_name] = score
 
     @property
-    def _metrics(self) -> Dict:
+    def _metrics(self) -> Dict[str, Any]:
         """Returns the calculated case and aggregate results"""
         return {
             "case": self._scores,
