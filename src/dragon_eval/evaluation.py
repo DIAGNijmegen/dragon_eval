@@ -185,14 +185,20 @@ class DragonEval(ClassificationEvaluation):
             if not self.tasks:
                 raise ValueError("Could not find any tasks!")
         else:
-            # check if all tasks exist
+            # collect task names (possibly using partial names)
             task_names = []
             for task in self.tasks:
+                if (self._ground_truth_path / f"{task}.json").exists():
+                    task_names.append(task)
+                    continue
+
                 files_found = [path.stem for path in self._ground_truth_path.glob(f"*{task}*.json")]
                 if not files_found:
                     raise ValueError(f"Could not find task: {task}")
+
                 if len(files_found) > 1:
                     raise ValueError(f"Found multiple tasks matching {task}: {files_found}")
+
                 task_names.append(files_found[0])
             if len(set(task_names)) != len(self.tasks):
                 raise ValueError(f"Duplicate tasks found: {task_names}")
@@ -336,7 +342,7 @@ class DragonEval(ClassificationEvaluation):
         return {
             "case": self._scores,
             "aggregates": self._aggregate_results,
-            "version": "0.2.5",
+            "version": "0.2.6",
         }
 
     @staticmethod
