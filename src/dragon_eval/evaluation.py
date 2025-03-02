@@ -82,6 +82,20 @@ TASK_TYPE = {
     "Task028_skin_pathology_ner": EvalType.MULTI_LABEL_NER,
 }
 
+REGRESSION_EPSILON = {
+    # example tasks
+    "Task106_Example_sl_reg": 4,
+    "Task107_Example_ml_reg": 4,
+
+    # DRAGON benchmark tasks
+    "Task019_prostate_volume_reg": 4,
+    "Task020_psa_reg": 0.4,
+    "Task021_psad_reg": 0.04,
+    "Task022_pdac_size_reg": 4,
+    "Task023_nodule_diameter_reg": 4,
+    "Task024_recist_lesion_size_reg": 4,
+}
+
 
 class JSONLoader(FileLoader):
     """
@@ -290,19 +304,7 @@ class DragonEval(ClassificationEvaluation):
             # note: for the multi-label regression task, each subtask is the same,
             #       so we pool the labels and predictions
             # metric: R-SMAPE
-            epsilon = {
-                # example tasks
-                "Task106_Example_sl_reg": 4,
-                "Task107_Example_ml_reg": 4,
-
-                # DRAGON benchmark tasks
-                "Task019_prostate_volume_reg": 4,
-                "Task020_psa_reg": 0.4,
-                "Task021_psad_reg": 0.04,
-                "Task022_pdac_size_reg": 4,
-                "Task023_nodule_diameter_reg": 4,
-                "Task024_recist_lesion_size_reg": 4,
-            }[task_name]
+            epsilon = REGRESSION_EPSILON[task_name]
 
             score = score_rsmape(
                 y_true=y_true.explode().astype(float),
@@ -343,7 +345,7 @@ class DragonEval(ClassificationEvaluation):
         return {
             "case": self._scores,
             "aggregates": self._aggregate_results,
-            "version": "0.2.6",
+            "version": "0.2.7",
         }
 
     @staticmethod
