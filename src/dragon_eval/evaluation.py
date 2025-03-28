@@ -20,12 +20,15 @@ from typing import Any, Dict, Iterable, List, Optional
 import numpy as np
 import pandas as pd
 import seqeval.metrics
-from evalutils.evalutils import (DEFAULT_EVALUATION_OUTPUT_FILE_PATH,
-                                 DEFAULT_GROUND_TRUTH_PATH, DEFAULT_INPUT_PATH,
-                                 ClassificationEvaluation)
-from evalutils.io import FileLoader
-from evalutils.validators import ExpectedColumnNamesValidator
 from sklearn.metrics import cohen_kappa_score, roc_auc_score
+
+from dragon_eval.evalutils.evalutils import ClassificationEvaluation
+from dragon_eval.evalutils.io import FileLoader
+from dragon_eval.evalutils.validators import ExpectedColumnNamesValidator
+
+DEFAULT_INPUT_PATH = Path("/input/")
+DEFAULT_GROUND_TRUTH_PATH = Path("/opt/app/ground-truth/")
+DEFAULT_EVALUATION_OUTPUT_FILE_PATH = Path("/output/metrics.json")
 
 
 class EvalType(Enum):
@@ -345,7 +348,7 @@ class DragonEval(ClassificationEvaluation):
         return {
             "case": self._scores,
             "aggregates": self._aggregate_results,
-            "version": "0.2.7",
+            "version": "0.2.8",
         }
 
     @staticmethod
