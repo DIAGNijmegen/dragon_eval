@@ -15,7 +15,7 @@
 import re
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -115,28 +115,40 @@ class JSONLoader(FileLoader):
 
 
 def score_rsmape(
-    *, y_true, y_pred, epsilon: float, ignore_missing_targets: bool = False,
+    *, y_true, y_pred, epsilon: Union[float, List[float], np.ndarray], ignore_missing_targets: bool = False,
 ) -> float:
     """Robust symmetric mean absolute percentage score (R-SMAPE)
     The R-SMAPE is a robust version of the symmetric mean absolute percentage error (SMAPE) by adding epsilon to the denominator.
     SMAPE is a symmetric version of the mean absolute percentage error (MAPE) by adding the absolute value of the predicted values to the denominator.
     This results in a score that is more robust to outliers and makes sure that swapping the true and predicted values does not change the score.
     """
-    y_true = np.asarray(y_true)
-    y_pred = np.asarray(y_pred)
+    # flatten the inputs and convert to float
+    y_true = np.ravel(y_true).astype(float)
+    y_pred = np.ravel(y_pred).astype(float)
 
-    # flatten arrays and maybe ignore missing targets
-    if ignore_missing_targets:
-        mask = ~np.isnan(y_true)
-        y_true = y_true[mask]
-        y_pred = y_pred[mask]
-    else:
-        y_pred = np.ravel(y_pred)
-        y_true = np.ravel(y_true)
+    # impute missing predictions
+    mask = np.isnan(y_pred)
+    if np.any(mask):
+        print(f"Imputing {np.sum(mask)} missing predictions with 0")
+        y_pred[mask] = 0
 
-    # compute R-SMAPE
+    # repeat the epsilon value for each target if needed
+    if isinstance(epsilon, (list, np.ndarray)):
+        if y_true.shape[0] % len(epsilon) != 0:
+            raise ValueError(f"Length of epsilon ({len(epsilon)}) does not match number of targets ({y_true.shape[0]})")
+        epsilon = np.resize(epsilon, y_pred.shape)
+
+    # compute numerator and denominator
     numerator = np.abs(y_true - y_pred)
     denominator = np.abs(y_true) + np.abs(y_pred) + epsilon
+
+    # ignore missing targets
+    if ignore_missing_targets:
+        mask = ~np.isnan(y_true)
+        numerator = numerator[mask]
+        denominator = denominator[mask]
+
+    # compute R-SMAPE
     rsmape = numerator / denominator
     return float(1 - np.mean(rsmape))
 
@@ -348,7 +360,7 @@ class DragonEval(ClassificationEvaluation):
         return {
             "case": self._scores,
             "aggregates": self._aggregate_results,
-            "version": "0.2.8",
+            "version": "0.2.9",
         }
 
     @staticmethod
