@@ -25,6 +25,7 @@ from sklearn.metrics import cohen_kappa_score, roc_auc_score
 from dragon_eval.evalutils.evalutils import ClassificationEvaluation
 from dragon_eval.evalutils.io import FileLoader
 from dragon_eval.evalutils.validators import ExpectedColumnNamesValidator
+from dragon_eval.redaction_score import evaluate_redaction
 
 DEFAULT_INPUT_PATH = Path("/input/")
 DEFAULT_GROUND_TRUTH_PATH = Path("/opt/app/ground-truth/")
@@ -33,13 +34,19 @@ DEFAULT_EVALUATION_OUTPUT_FILE_PATH = Path("/output/metrics.json")
 
 class EvalType(Enum):
     """Problem type of the task"""
+
     SINGLE_LABEL_NER = "single-label named entity recognition (macro F1)"
     MULTI_LABEL_NER = "multi-label named entity recognition (weighted F1)"
     REGRESSION = "regression (R-SMAPE)"
     BINARY_CLASSIFICATION = "binary classification (AUC)"
     BINARY_CLASSIFICATION_NON_SHARED_TASK = "binary classification different objective across labels (Unweighted Cohen's kappa)"
-    ORDINAL_MULTI_CLASS_CLASSIFICATION = "ordinal multi-class classification (Linear Cohen's kappa)"
-    NONORDINAL_MULTI_CLASS_CLASSIFICATION = "non-ordinal multi-class classification (Unweighted Cohen's kappa)"
+    ORDINAL_MULTI_CLASS_CLASSIFICATION = (
+        "ordinal multi-class classification (Linear Cohen's kappa)"
+    )
+    NONORDINAL_MULTI_CLASS_CLASSIFICATION = (
+        "non-ordinal multi-class classification (Unweighted Cohen's kappa)"
+    )
+    TEXT_TARGET = "single-label named entity recognition with tags inserted in the text (Blended Redaction F1: mean over redaction_f1 and type_f1, where redaction_f1 is the F1 for 'TAG' vs 'O' and type_f1 is the strict macro‑F1 across concrete tags)"
 
 
 TASK_TYPE = {
@@ -53,7 +60,6 @@ TASK_TYPE = {
     "Task107_Example_ml_reg": EvalType.REGRESSION,
     "Task108_Example_sl_ner": EvalType.SINGLE_LABEL_NER,
     "Task109_Example_ml_ner": EvalType.MULTI_LABEL_NER,
-
     # tasks from the DRAGON benchmark
     "Task001_adhesion_clf": EvalType.BINARY_CLASSIFICATION,
     "Task002_nodule_clf": EvalType.BINARY_CLASSIFICATION,
@@ -89,7 +95,6 @@ REGRESSION_EPSILON = {
     # example tasks
     "Task106_Example_sl_reg": 4,
     "Task107_Example_ml_reg": 4,
-
     # DRAGON benchmark tasks
     "Task019_prostate_volume_reg": 4,
     "Task020_psa_reg": 0.4,
@@ -115,7 +120,11 @@ class JSONLoader(FileLoader):
 
 
 def score_rsmape(
-    *, y_true, y_pred, epsilon: Union[float, List[float], np.ndarray], ignore_missing_targets: bool = False,
+    *,
+    y_true,
+    y_pred,
+    epsilon: Union[float, List[float], np.ndarray],
+    ignore_missing_targets: bool = False,
 ) -> float:
     """Robust symmetric mean absolute percentage score (R-SMAPE)
     The R-SMAPE is a robust version of the symmetric mean absolute percentage error (SMAPE) by adding epsilon to the denominator.
@@ -154,21 +163,41 @@ def score_rsmape(
 
 
 def select_entity_labels(labels: List[List[str]], entity_lbl: str) -> List[str]:
-    labels = [[lbl for lbl in token_labels if entity_lbl in lbl] for token_labels in labels]
-    return [(token_labels[0] if len(token_labels) > 0 else "O") for token_labels in labels]
+    labels = [
+        [lbl for lbl in token_labels if entity_lbl in lbl] for token_labels in labels
+    ]
+    return [
+        (token_labels[0] if len(token_labels) > 0 else "O") for token_labels in labels
+    ]
 
 
 def score_multi_label_f1(
-    *, y_true: pd.Series, y_pred: pd.Series, average: str = "weighted", out_label: str = "O",
+    *,
+    y_true: pd.Series,
+    y_pred: pd.Series,
+    average: str = "weighted",
+    out_label: str = "O",
 ) -> float:
     """Multi-label F1 score"""
-    label_values = sorted(set([re.sub(r"^[BI]-", "", lbl) for lbl in y_true.explode().explode().unique() if lbl != out_label]))
+    label_values = sorted(
+        set(
+            [
+                re.sub(r"^[BI]-", "", lbl)
+                for lbl in y_true.explode().explode().unique()
+                if lbl != out_label
+            ]
+        )
+    )
 
     per_lbl_score, per_lbl_support = [], []
     for entity_lbl in label_values:
         # select labels for the current entity
-        y_true_lbl = y_true.apply(lambda labels: select_entity_labels(labels, entity_lbl=entity_lbl))
-        y_pred_lbl = y_pred.apply(lambda labels: select_entity_labels(labels, entity_lbl=entity_lbl))
+        y_true_lbl = y_true.apply(
+            lambda labels: select_entity_labels(labels, entity_lbl=entity_lbl)
+        )
+        y_pred_lbl = y_pred.apply(
+            lambda labels: select_entity_labels(labels, entity_lbl=entity_lbl)
+        )
         support = len(seqeval.metrics.sequence_labeling.get_entities(y_true_lbl))
 
         # calculate F1 score
@@ -192,12 +221,18 @@ def score_multi_label_f1(
 
 
 class DragonEval(ClassificationEvaluation):
-    def __init__(self, folds: Iterable[int] = range(5), tasks: Optional[Iterable[str]] = None, **kwargs):
+    def __init__(
+        self,
+        folds: Iterable[int] = range(5),
+        tasks: Optional[Iterable[str]] = None,
+        **kwargs,
+    ):
         super().__init__(
             file_loader=JSONLoader(),
             validators=(
                 ExpectedColumnNamesValidator(
-                    expected=("uid", ), extra_cols_check=False,
+                    expected=("uid",),
+                    extra_cols_check=False,
                 ),
             ),
             join_key="uid",
@@ -208,10 +243,9 @@ class DragonEval(ClassificationEvaluation):
 
         if tasks is None:
             # get all tasks
-            self.tasks: list[str] = sorted([
-                path.stem
-                for path in self._ground_truth_path.glob("*.json")
-            ])
+            self.tasks: list[str] = sorted(
+                [path.stem for path in self._ground_truth_path.glob("*.json")]
+            )
             if not self.tasks:
                 raise ValueError("Could not find any tasks!")
         else:
@@ -222,12 +256,16 @@ class DragonEval(ClassificationEvaluation):
                     task_names.append(task)
                     continue
 
-                files_found = [path.stem for path in self._ground_truth_path.glob(f"*{task}*.json")]
+                files_found = [
+                    path.stem for path in self._ground_truth_path.glob(f"*{task}*.json")
+                ]
                 if not files_found:
                     raise ValueError(f"Could not find task: {task}")
 
                 if len(files_found) > 1:
-                    raise ValueError(f"Found multiple tasks matching {task}: {files_found}")
+                    raise ValueError(
+                        f"Found multiple tasks matching {task}: {files_found}"
+                    )
 
                 task_names.append(files_found[0])
             if len(set(task_names)) != len(list(tasks)):
@@ -266,13 +304,22 @@ class DragonEval(ClassificationEvaluation):
         """
         print(f"Evaluating {job_name}")
         # select ground truth and prediction columns
-        label_column = [col for col in self._cases.columns if col.endswith("_target")][0]
+        label_column = [col for col in self._cases.columns if col.endswith("_target")][
+            0
+        ]
         prediction_column = label_column.replace("_target", "")
         if prediction_column not in self._cases.columns:
-            raise ValueError(f"Could not find prediction column for {label_column} (job: {job_name})")
+            raise ValueError(
+                f"Could not find prediction column for {label_column} (job: {job_name})"
+            )
+        text_column = "text"
 
         y_true = self._cases[label_column]
         y_pred = self._cases[prediction_column]
+
+        y_orig = None
+        if text_column in self._cases.columns:
+            y_orig = self._cases[text_column]
 
         if TASK_TYPE[task_name] == EvalType.ORDINAL_MULTI_CLASS_CLASSIFICATION:
             # evaluate ordinal multi-class classification tasks
@@ -306,13 +353,15 @@ class DragonEval(ClassificationEvaluation):
         elif TASK_TYPE[task_name] == EvalType.BINARY_CLASSIFICATION_NON_SHARED_TASK:
             # evaluate binary classification tasks with different objectives across labels
             # metric: mean AUC per objective
-            score = np.mean([
-                roc_auc_score(
-                    y_true=y_true.apply(lambda values: values[i]),
-                    y_score=y_pred.apply(lambda values: values[i]),
-                )
-                for i in range(len(y_true.iloc[0]))
-            ])
+            score = np.mean(
+                [
+                    roc_auc_score(
+                        y_true=y_true.apply(lambda values: values[i]),
+                        y_score=y_pred.apply(lambda values: values[i]),
+                    )
+                    for i in range(len(y_true.iloc[0]))
+                ]
+            )
 
         elif TASK_TYPE[task_name] == EvalType.REGRESSION:
             # evaluate regression tasks
@@ -345,6 +394,24 @@ class DragonEval(ClassificationEvaluation):
                 y_pred=y_pred,
                 average="weighted",
             )
+
+        elif TASK_TYPE[task_name] == EvalType.TEXT_TARGET:
+            # evaluate single-label named entity recognition with tags inserted in the text tasks
+            # metric: blended redaction F1 score
+            if y_orig is None:
+                raise ValueError(
+                    f"Could not find original text at {text_column} for label {label_column} (job: {job_name})"
+                )
+
+            score = [
+                evaluate_redaction(
+                    original=orig,
+                    ground_truth=true,
+                    prediction=pred,
+                    alpha=0.7,
+                )["blended_redaction_f1"]
+                for orig, true, pred in zip(y_orig, y_true, y_pred)
+            ]
 
         else:
             raise ValueError(f"Unexpexted task: {task_name}")
@@ -383,8 +450,12 @@ class DragonEval(ClassificationEvaluation):
 
         # calculate overall score
         self._aggregate_results["overall"] = {
-            "mean": np.mean([score["mean"] for score in self._aggregate_results.values()]),
-            "std": np.mean([score["std"] for score in self._aggregate_results.values()]),
+            "mean": np.mean(
+                [score["mean"] for score in self._aggregate_results.values()]
+            ),
+            "std": np.mean(
+                [score["std"] for score in self._aggregate_results.values()]
+            ),
         }
 
         print("Aggregate results:")
@@ -394,7 +465,19 @@ class DragonEval(ClassificationEvaluation):
 
 if __name__ == "__main__":
     DragonEval(
-        ground_truth_path=DEFAULT_GROUND_TRUTH_PATH if DEFAULT_GROUND_TRUTH_PATH.exists() else Path("ground-truth"),
-        predictions_path=DEFAULT_INPUT_PATH if DEFAULT_INPUT_PATH.exists() else Path("test-predictions"),
-        output_file=DEFAULT_EVALUATION_OUTPUT_FILE_PATH if DEFAULT_EVALUATION_OUTPUT_FILE_PATH.parent.exists() else Path("test-output/metrics.json"),
+        ground_truth_path=(
+            DEFAULT_GROUND_TRUTH_PATH
+            if DEFAULT_GROUND_TRUTH_PATH.exists()
+            else Path("ground-truth")
+        ),
+        predictions_path=(
+            DEFAULT_INPUT_PATH
+            if DEFAULT_INPUT_PATH.exists()
+            else Path("test-predictions")
+        ),
+        output_file=(
+            DEFAULT_EVALUATION_OUTPUT_FILE_PATH
+            if DEFAULT_EVALUATION_OUTPUT_FILE_PATH.parent.exists()
+            else Path("test-output/metrics.json")
+        ),
     ).evaluate()
