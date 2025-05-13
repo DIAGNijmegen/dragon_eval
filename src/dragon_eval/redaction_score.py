@@ -1,7 +1,7 @@
 """
 redaction_scoring.py
 ----------------------------------
-Utilities to score PII‑redacted text at character level.
+Utilities to score PII-redacted text at character level.
 
 Usage
 -----
@@ -40,24 +40,24 @@ def extract_tags(text: str) -> set[str]:
 
 
 # ---------------------------------------------------------------------------
-# 2.  Tag‑placeholder machinery
+# 2.  Tag-placeholder machinery
 # ---------------------------------------------------------------------------
 
 
 def _replace_tags_with_placeholders(text: str) -> Tuple[str, Dict[str, str]]:
     """
-    Replace every <TAG> with a single private‑use‑area (PUA) character
+    Replace every <TAG> with a single private-use-area (PUA) character
     so difflib cannot split a tag in half.
 
     Returns
     -------
     new_text : str
         The text with placeholders.
-    mapping  : dict { placeholder‑char -> original <TAG> }
+    mapping  : dict { placeholder-char -> original <TAG> }
     """
     if any("\ue000" <= ch <= "\uf8ff" for ch in text):
         raise ValueError(
-            "The input text contains characters in the Unicode private-use area (U+E000–U+F8FF), "
+            "The input text contains characters in the Unicode private-use area (U+E000 to U+F8FF), "
             "which are reserved for placeholders and may cause conflicts."
         )
 
@@ -66,7 +66,7 @@ def _replace_tags_with_placeholders(text: str) -> Tuple[str, Dict[str, str]]:
 
     last = 0
     for i, m in enumerate(re.finditer(r"<[^<>]+>", text)):
-        pieces.append(text[last : m.start()])
+        pieces.append(text[last:m.start()])
 
         placeholder = chr(0xE000 + i)  # U+E000 … never occurs in normal text
         pieces.append(placeholder)
@@ -96,7 +96,7 @@ def _get_tag_labels(original: str, redacted: str) -> List[str]:
             labels.extend(["O"] * (i2 - i1))
             continue
 
-        # Any non‑equal op (replace / insert / delete)
+        # Any non-equal op (replace / insert / delete)
         # might contain a placeholder → map to its tag
         segment = redacted_proc[j1:j2]
         tag_label = "O"
@@ -126,12 +126,14 @@ def evaluate_redaction(
     alpha: float = 0.7,
 ) -> dict:
     """
-    Mixed‑severity scoring.
+    Mixed-severity scoring. Blended Redaction F1: mean over redaction_f1
+    and type_f1, where redaction_f1 is the F1 for 'TAG' vs 'O' and type_f1
+    is the strict macro-F1 across concrete tags.
 
     Parameters
     ----------
     alpha : float, default 0.7
-        Weight given to *redaction‑F1* (PII vs. non‑PII).
+        Weight given to *redaction-F1* (PII vs. non-PII).
         1.0 → ignore tag types completely.
         0.0 → equivalent to the strict evaluator.
 
@@ -140,7 +142,7 @@ def evaluate_redaction(
     dict with keys
         overall_score : weighted combination
         redaction_f1  : F1 for "TAG" vs "O"
-        type_f1       : strict macro‑F1 across concrete tags
+        type_f1       : strict macro-F1 across concrete tags
         binary_report : classification_report for the binary case
         type_report   : classification_report for the strict case
         alpha         : the value used

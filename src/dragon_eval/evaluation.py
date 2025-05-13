@@ -46,7 +46,7 @@ class EvalType(Enum):
     NONORDINAL_MULTI_CLASS_CLASSIFICATION = (
         "non-ordinal multi-class classification (Unweighted Cohen's kappa)"
     )
-    TEXT_TARGET = "single-label named entity recognition with tags inserted in the text (Blended Redaction F1: mean over redaction_f1 and type_f1, where redaction_f1 is the F1 for 'TAG' vs 'O' and type_f1 is the strict macro‑F1 across concrete tags)"
+    TEXT_TARGET = "single-label named entity recognition with Blended Redaction F1 score"
 
 
 TASK_TYPE = {
