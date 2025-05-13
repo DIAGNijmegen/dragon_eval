@@ -12,10 +12,11 @@ from dragon_eval.evaluation import (TASK_TYPE, EvalType, score_multi_label_f1,
         ([1.0, 0.0, 4.0], [1.0, 0.0, 3.9], 0.01, 0.992),
         ([0.0, 0.0, 0.0], [0.1, 0.2, 0.3], 0.001, 0.00606612453777744),  # example to handle division by zero
         ([0.0, 0.0, 0.0], [0.2, 0.3, 0.4], 0.001, 0.0035970497001190926),  # example to handle division by zero
+        ([[1.0, 2.0, 3.0], [4.0, 5.0, None], [6.0, None, None]], [[7.0, None, None], [8.0, None, None], [9.0, 10.0, None]], [11.0, 12.0, 13.0], 0.7950730129228245),  # example with multiple epsilons
     ],
 )
 def test_score_rsmape(y_true, y_pred, epsilon, expected_score):
-    score = score_rsmape(y_true=y_true, y_pred=y_pred, epsilon=epsilon)
+    score = score_rsmape(y_true=y_true, y_pred=y_pred, epsilon=epsilon, ignore_missing_targets=True)
     assert pytest.approx(score, rel=1e-2) == expected_score
 
 
