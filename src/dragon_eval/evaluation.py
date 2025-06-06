@@ -430,7 +430,7 @@ class DragonEval(ClassificationEvaluation):
         return {
             "case": self._scores,
             "aggregates": self._aggregate_results,
-            "version": "0.2.10",
+            "version": "0.2.11",
         }
 
     @staticmethod
