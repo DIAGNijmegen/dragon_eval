@@ -349,19 +349,22 @@ class DragonEval(ClassificationEvaluation):
                 y_true=y_true.explode().explode().values.astype(int),
                 y_score=y_pred.explode().explode().values.astype(float),
             )
+            if np.isnan(score):
+                score = 0.0
 
         elif TASK_TYPE[task_name] == EvalType.BINARY_CLASSIFICATION_NON_SHARED_TASK:
             # evaluate binary classification tasks with different objectives across labels
             # metric: mean AUC per objective
-            score = np.mean(
-                [
-                    roc_auc_score(
-                        y_true=y_true.apply(lambda values: values[i]),
-                        y_score=y_pred.apply(lambda values: values[i]),
-                    )
-                    for i in range(len(y_true.iloc[0]))
-                ]
-            )
+            auc_scores = []
+            for i in range(len(y_true.iloc[0])):
+                auc = roc_auc_score(
+                    y_true=y_true.apply(lambda values: values[i]),
+                    y_score=y_pred.apply(lambda values: values[i]),
+                )
+                if np.isnan(auc):
+                    auc = 0.0
+                auc_scores.append(auc)
+            score = np.mean(auc_scores)
 
         elif TASK_TYPE[task_name] == EvalType.REGRESSION:
             # evaluate regression tasks
@@ -427,7 +430,7 @@ class DragonEval(ClassificationEvaluation):
         return {
             "case": self._scores,
             "aggregates": self._aggregate_results,
-            "version": "0.2.10",
+            "version": "0.2.11",
         }
 
     @staticmethod
